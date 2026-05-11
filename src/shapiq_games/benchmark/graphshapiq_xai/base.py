@@ -99,7 +99,8 @@ class GraphGame(Game):
                 )
                 return torch.zeros(self.x_graph.num_node_features, dtype=torch.float32,
                                    device=x.device)
-
+                
+    #Q: Shoudl we use both strategies for masking?
     def mask_input(self, coalition: np.ndarray) -> Data:
         """Mask inactive node features with the baseline.
 
