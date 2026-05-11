@@ -23,11 +23,11 @@ class GraphGame(Game):
 
     def __init__(
         self,
-        model: torch.nn.Module,
+        model: torch.nn.Module, #TODO: Validater missing Q:Is it enough to just use GCN | GIN | GAT?
         x_graph: Data,
         *,
         class_index: int | None = None,
-        baseline_strategy: str | None = None, #TODO: Validater missing
+        baseline_strategy: str | None = None, 
         normalize: bool = True,
         verbose: bool = True,
     ) -> None:
