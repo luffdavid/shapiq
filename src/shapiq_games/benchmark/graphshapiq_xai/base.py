@@ -27,7 +27,7 @@ class GraphGame(Game):
         x_graph: Data,
         *,
         class_index: int | None = None,
-        baseline_strategy: str | None = None,
+        baseline_strategy: str | None = None, #TODO: Validater missing
         normalize: bool = True,
         verbose: bool = True,
     ) -> None:
