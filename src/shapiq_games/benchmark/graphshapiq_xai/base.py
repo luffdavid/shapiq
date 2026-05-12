@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import torch
@@ -26,6 +26,7 @@ class GraphGame(Game):
         model: torch.nn.Module, #TODO: Validater missing Q:Is it enough to just use GCN | GIN | GAT?
         x_graph: Data,
         *,
+        task: Literal["classification", "regression"] = "classification",
         class_index: int | None = None,
         baseline_strategy: str | None = None, 
         normalize: bool = True,
@@ -36,13 +37,20 @@ class GraphGame(Game):
         Args:
             model: A GNN model (GCN, GIN, or GAT) used to compute predictions.
             x_graph: The input graph as a torch_geometric Data object.
-            class_index: The target class index for classification. If None, the predicted class is
-                used.
+            task: Whether the model performs "classification" or "regression".
+            class_index: Target class index for classification. If None, the predicted class is
+                used. Must not be set when task is "regression".
             baseline_strategy: Strategy for replacing masked node features. One of "average",
                 "min", "max", or "zeros". If None, defaults to zeros with a warning.
             normalize: Whether to normalize the game by the empty coalition prediction.
             verbose: Whether to show progress bars during evaluation.
         """
+        if task not in ("classification", "regression"):
+            raise ValueError(f"task must be 'classification' or 'regression', got {task!r}")
+        if task == "regression" and class_index is not None:
+            raise ValueError("class_index cannot be set for regression tasks.")
+
+        self.task = task
         self.model = model
         self.model.eval()
         self.x_graph = x_graph.clone()
@@ -55,13 +63,16 @@ class GraphGame(Game):
         else:
             self.baseline = self.calculate_baseline(baseline_strategy)
 
-        if class_index is None:
-            model_output = self.model(
-                x=self.x_graph.x, edge_index=self.x_graph.edge_index, batch=self.x_graph.batch
-            )
-            self.y_index = int(np.argmax(model_output.detach().numpy(), axis=1)[0])
+        if task == "classification":
+            if class_index is None:
+                model_output = self.model(
+                    x=self.x_graph.x, edge_index=self.x_graph.edge_index, batch=self.x_graph.batch
+                )
+                self.y_index: int | None = int(np.argmax(model_output.detach().numpy(), axis=1)[0])
+            else:
+                self.y_index = int(class_index)
         else:
-            self.y_index = int(class_index)
+            self.y_index = None
 
         if normalize:
             normalization_value = float(self.value_function(np.zeros(len(x_graph.x))))
@@ -146,9 +157,12 @@ class GraphGame(Game):
                     batch=getattr(masked_graph, "batch", None),
                 )
 
-            if model_output.ndim > 1:
+            if self.task == "classification":
+                # Output shape: (1, num_classes).
+                # Select the score/logit of the target class.
                 coalition_value = model_output[0, self.y_index]
             else:
+                # Output is a single value.
                 coalition_value = model_output.squeeze()
 
             coalition_values.append(float(coalition_value))
