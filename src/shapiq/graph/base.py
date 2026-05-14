@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import torch
-
 from torch_geometric.nn.models import GAT, GCN, GIN
 
 if TYPE_CHECKING:
@@ -25,12 +24,12 @@ class GraphGame(Game):
 
     def __init__(
         self,
-        model: GCN | GIN | GAT, 
+        model: GCN | GIN | GAT,
         x_graph: Data,
         *,
         task: Literal["classification", "regression"] = "classification",
         class_index: int | None = None,
-        baseline_strategy: str | None = None, 
+        baseline_strategy: str | torch.Tensor | None = None,
         normalize: bool = True,
         verbose: bool = True,
     ) -> None:
@@ -42,18 +41,28 @@ class GraphGame(Game):
             task: Whether the model performs "classification" or "regression".
             class_index: Target class index for classification. If None, the predicted class is
                 used. Must not be set when task is "regression".
-            baseline_strategy: Strategy for replacing masked node features. One of "average",
-                "min", "max", or "zeros". If None, defaults to zeros with a warning.
+            baseline_strategy: Strategy for replacing masked node features. Either a string
+                (``"average"``, ``"min"``, ``"max"``, or ``"zeros"``) to compute the baseline
+                from the graph data, or an explicit ``torch.Tensor`` of shape
+                ``(num_node_features,)`` used directly as the baseline. If ``None``, defaults
+                to zeros with a warning.
             normalize: Whether to normalize the game by the empty coalition prediction.
             verbose: Whether to show progress bars during evaluation.
         """
         if task not in ("classification", "regression"):
-            raise ValueError(f"task must be 'classification' or 'regression', got {task!r}")
+            msg = f"task must be 'classification' or 'regression', got {task!r}"
+            raise ValueError(msg)
         if task == "regression" and class_index is not None:
-            raise ValueError("class_index cannot be set for regression tasks.")
+            msg = "class_index cannot be set for regression tasks."
+            raise ValueError(msg)
 
-        if not isinstance(model, (GCN, GIN, GAT)):
-            raise ValueError(f"Model must be GCN, GIN, or GAT, got {type(model).__name__!r}.")
+        if not isinstance(model, GCN | GIN | GAT):
+            msg = f"Model must be GCN, GIN, or GAT, got {type(model).__name__!r}."
+            raise TypeError(msg)
+
+        if x_graph.x is None:
+            msg = "x_graph must have node features (x_graph.x must not be None)."
+            raise ValueError(msg)
 
         self.task = task
         self.model = model
@@ -65,6 +74,15 @@ class GraphGame(Game):
                 "Baseline is not provided, baseline will be initialized as zero...", stacklevel=2
             )
             self.baseline = torch.zeros(x_graph.num_node_features, dtype=torch.float32)
+        elif isinstance(baseline_strategy, torch.Tensor):
+            expected_shape = (x_graph.num_node_features,)
+            if baseline_strategy.shape != torch.Size(expected_shape):
+                msg = (
+                    f"baseline_strategy tensor must have shape {expected_shape}, "
+                    f"got {tuple(baseline_strategy.shape)}."
+                )
+                raise ValueError(msg)
+            self.baseline = baseline_strategy.to(dtype=torch.float32)
         else:
             self.baseline = self.calculate_baseline(baseline_strategy)
 
@@ -79,21 +97,21 @@ class GraphGame(Game):
         else:
             self.y_index = None
 
+        n_nodes = x_graph.x.size(0)
         if normalize:
-            normalization_value = float(self.value_function(np.zeros(len(x_graph.x))))
+            normalization_value = float(self.value_function(np.zeros(n_nodes)))
             super().__init__(
-                n_players=len(x_graph.x),
+                n_players=n_nodes,
                 normalize=normalize,
                 normalization_value=normalization_value,
                 verbose=verbose,
             )
         else:
-            super().__init__(n_players=len(x_graph.x), normalize=normalize)
+            super().__init__(n_players=n_nodes, normalize=normalize, verbose=verbose)
         self._grand_coalition_set = set(range(self.n_players))
 
     def calculate_baseline(self, strategy: str) -> torch.Tensor:
         """Returns a tensor for replacing node features depending on the chosen strategy."""
-
         # No deep copy here, since the x_graph is not modified
         x = self.x_graph.x
         match strategy:
@@ -104,19 +122,19 @@ class GraphGame(Game):
             case "max":
                 return torch.amax(x, dim=0)
             case "zeros":
-
                 # Device is needed for the zeros tensor -> possible that the device is not the same as the model
-                return torch.zeros(self.x_graph.num_node_features, dtype=torch.float32,
-                                   device=x.device)
+                return torch.zeros(
+                    self.x_graph.num_node_features, dtype=torch.float32, device=x.device
+                )
             case _:
                 warnings.warn(
                     "Unknown baseline strategy, baseline will be initialized as zero...",
                     stacklevel=2,
                 )
-                return torch.zeros(self.x_graph.num_node_features, dtype=torch.float32,
-                                   device=x.device)
-                
-    #Q: Shoudl we use both strategies for masking?
+                return torch.zeros(
+                    self.x_graph.num_node_features, dtype=torch.float32, device=x.device
+                )
+
     def mask_input(self, coalition: np.ndarray) -> Data:
         """Mask inactive node features with the baseline.
 
@@ -126,15 +144,12 @@ class GraphGame(Game):
         Returns:
             A cloned graph with inactive nodes replaced by the baseline features.
         """
-
-        # Convert coalition to boolean tensor on the same device as the model
+        # Convert coalition to boolean tensor on the same device as the graph features
         coalition_tensor = torch.tensor(coalition, dtype=torch.bool, device=self.x_graph.x.device)
         x_masked = self.x_graph.clone()
-
-        # Reshape the baseline to match the number of features in the graph
+        # Reshape the baseline to broadcast over all inactive nodes
         baseline_reshaped = self.baseline.reshape(1, -1)
         x_masked.x[~coalition_tensor] = baseline_reshaped
-
         return x_masked
 
     def value_function(self, coalitions: np.ndarray) -> np.ndarray:
@@ -163,11 +178,9 @@ class GraphGame(Game):
                 )
 
             if self.task == "classification":
-                # Output shape: (1, num_classes).
-                # Select the score/logit of the target class.
+                # Output shape: (1, num_classes) — select the target class score.
                 coalition_value = model_output[0, self.y_index]
             else:
-                # Output is a single value.
                 coalition_value = model_output.squeeze()
 
             coalition_values.append(float(coalition_value))
