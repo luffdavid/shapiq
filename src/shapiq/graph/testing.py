@@ -8,8 +8,8 @@ import numpy as np
 import torch
 from torch_geometric.data import Data
 
-from shapiq_games.benchmark.graphshapiq_xai.base import GraphGame
-from shapiq_games.benchmark.graphshapiq_xai.test_models import GCN2Layer
+from shapiq.graph.base import GraphGame
+from shapiq.graph.test_models import GCN2Layer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
