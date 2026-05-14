@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import torch
 
+from torch_geometric.nn.models import GAT, GCN, GIN
+
 if TYPE_CHECKING:
     from torch_geometric.data import Data
 
@@ -23,7 +25,7 @@ class GraphGame(Game):
 
     def __init__(
         self,
-        model: torch.nn.Module, #TODO: Validater missing Q:Is it enough to just use GCN | GIN | GAT?
+        model: GCN | GIN | GAT, 
         x_graph: Data,
         *,
         task: Literal["classification", "regression"] = "classification",
@@ -35,7 +37,7 @@ class GraphGame(Game):
         """Initialize the GraphGame.
 
         Args:
-            model: A GNN model (GCN, GIN, or GAT) used to compute predictions.
+            model: A GNN model (only GCN, GIN, or GAT) used to compute predictions.
             x_graph: The input graph as a torch_geometric Data object.
             task: Whether the model performs "classification" or "regression".
             class_index: Target class index for classification. If None, the predicted class is
@@ -49,6 +51,9 @@ class GraphGame(Game):
             raise ValueError(f"task must be 'classification' or 'regression', got {task!r}")
         if task == "regression" and class_index is not None:
             raise ValueError("class_index cannot be set for regression tasks.")
+
+        if not isinstance(model, (GCN, GIN, GAT)):
+            raise ValueError(f"Model must be GCN, GIN, or GAT, got {type(model).__name__!r}.")
 
         self.task = task
         self.model = model
