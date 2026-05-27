@@ -23,6 +23,8 @@ dependencies = [
     "networkx",
     "colour",
     "pillow",
+    "torch-geometric>=2.7.0",
+    "types-networkx>=3.6.1.20260518",
 ]
 authors = [
     {name = "Maximilian Muschalik", email = "Maximilian.Muschalik@lmu.de"},
@@ -65,6 +67,16 @@ keywords = [
 exclude_also = [
     'if TYPE_CHECKING:',
 ]
+
+[[tool.mypy.overrides]]
+module = "torch_geometric.*"
+ignore_missing_imports = true
+
+[tool.pyright]
+reportMissingTypeStubs = false
+
+[tool.mypy]
+ignore_missing_imports = true
 
 [tool.setuptools_scm]
 write_to = "src/shapiq/_version.py"
