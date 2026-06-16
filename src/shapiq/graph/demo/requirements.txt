@@ -1,0 +1,10 @@
+ipykernel
+notebook
+matplotlib
+torch
+torch_geometric
+rdkit
+tqdm
+numpy
+pandas
+scikit-learn
