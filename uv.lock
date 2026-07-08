@@ -4199,7 +4199,6 @@ dependencies = [
     { name = "requests" },
     { name = "scikit-learn" },
     { name = "scipy" },
-    { name = "torch-geometric" },
     { name = "tqdm" },
 ]
 
@@ -4209,6 +4208,9 @@ benchmark = [
     { name = "optuna" },
     { name = "tabpfn" },
     { name = "xgboost" },
+]
+graph = [
+    { name = "torch-geometric" },
 ]
 proxy = [
     { name = "catboost" },
@@ -4318,12 +4320,12 @@ requires-dist = [
     { name = "sparse-transform", marker = "extra == 'sparse'" },
     { name = "tabpfn", marker = "extra == 'benchmark'" },
     { name = "torch", marker = "extra == 'shapleig'", specifier = ">=2.9.1" },
-    { name = "torch-geometric", specifier = ">=2.8.0" },
+    { name = "torch-geometric", marker = "extra == 'graph'", specifier = ">=2.8.0" },
     { name = "tqdm" },
     { name = "xgboost", marker = "extra == 'benchmark'" },
     { name = "xgboost", marker = "extra == 'proxy'" },
 ]
-provides-extras = ["sparse", "proxy", "shapleig", "benchmark"]
+provides-extras = ["graph", "sparse", "proxy", "shapleig", "benchmark"]
 
 [package.metadata.requires-dev]
 all-ml = [
