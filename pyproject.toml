@@ -85,6 +85,13 @@ shapleig = [
     "botorch>=0.14.0",
     "linear_operator>=0.6",  # also a transitive gpytorch dependency, but imported directly
 ]
+benchmark = [
+    # optional model backends for shapiq_benchmark, imported lazily
+    "optuna",
+    "tabpfn",
+    "lightgbm",
+    "xgboost",
+]
 
 [tool.coverage.report]
 exclude_also = [
@@ -110,7 +117,8 @@ changelog = "https://github.com/mmschlk/shapiq/blob/main/CHANGELOG.md"
 [tool.pytest.ini_options]
 testpaths = [
   "tests/shapiq",
-  "tests/shapiq_games"
+  "tests/shapiq_games",
+  "tests/shapiq_benchmark"
 ]
 pythonpath = ["src"]
 minversion = "8.0"
@@ -255,7 +263,7 @@ python-platform = "linux"
 build = ["cp312-*", "cp313-*", "cp314-*"]
 skip = ["*-win32", "*-manylinux_i686", "pp*", "*musllinux*"]
 build-frontend = "uv"
-test-command = "python -c \"import shapiq; from shapiq.tree.conversion import cext; from shapiq.tree.interventional import cext; from shapiq.tree.linear import cext; print('C extensions OK')\""
+test-command = "python -c \"import shapiq; from shapiq.tree.conversion import cext; from shapiq.tree.interventional import cext; from shapiq.tree.linear import cext; from shapiq.graph import cext; print('C extensions OK')\""
 
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "manylinux_2_28"

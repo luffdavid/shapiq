@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import itertools
 import logging
 from typing import TYPE_CHECKING, cast
 
@@ -129,6 +130,90 @@ class GraphSHAPIQ:
             for subset in powerset(coalition):
                 sign = (-1) ** (len(coalition) - len(subset))
                 moebius_values[i] += sign * coalition_predictions[coalition_lookup[subset]]
+
+        return InteractionValues(
+            values=moebius_values,
+            interaction_lookup=moebius_lookup,
+            min_order=0,
+            max_order=self.n_players,
+            n_players=self.n_players,
+            index="Moebius",
+            baseline_value=float(moebius_values[moebius_lookup[()]]),
+        )
+
+    def compute_moebius_transform_cpp(
+        self,
+        coalitions: set[tuple[int, ...]],
+        coalition_predictions: NDArray[np.floating],
+        coalition_lookup: dict[tuple[int, ...], int],
+    ) -> InteractionValues:
+        """C++-accelerated drop-in replacement for :meth:`compute_moebius_transform`.
+
+        Computes the exact same Möbius coefficients as the pure-Python
+        :meth:`compute_moebius_transform`, but delegates the hot double loop over
+        coalitions and their subsets to the ``shapiq.graph.cext`` extension.
+
+        Requires the ``shapiq.graph.cext`` extension to be compiled (e.g. via
+        `uv pip install -e .`); otherwise an ``ImportError`` is raised.
+
+        Args:
+            coalitions: Set of coalitions (tuples of player indices).
+            coalition_predictions: Predictions for each coalition.
+            coalition_lookup: Mapping from coalition tuples to their indices.
+
+        Returns:
+            InteractionValues object containing the Möbius values.
+        """
+        from .cext import (
+            compute_moebius_transform as _moebius_cpp,  # ty: ignore[unresolved-import]
+        )
+
+        # Fix a stable iteration order for the coalitions; this defines both the
+        # output index i and the moebius_lookup, matching the Python reference.
+        coalition_list = list(coalitions)
+
+        # Build CSR arrays for the coalitions to evaluate. Sizes/offsets are
+        # computed vectorized via cumsum, and the flat member array is filled in
+        # one pass via fromiter — avoiding a Python-level list.extend() per
+        # coalition (see shapiq.tree.interventional.explainer for the same
+        # flatten-via-cumsum pattern).
+        sizes = np.fromiter(
+            (len(c) for c in coalition_list), dtype=np.int32, count=len(coalition_list)
+        )
+        offsets = np.empty(len(coalition_list) + 1, dtype=np.int32)
+        offsets[0] = 0
+        np.cumsum(sizes, out=offsets[1:])
+        members_flat = np.fromiter(
+            itertools.chain.from_iterable(coalition_list), dtype=np.int32, count=int(offsets[-1])
+        )
+
+        # Build CSR arrays for coalition_lookup (keys + prediction row index).
+        lookup_keys = list(coalition_lookup.keys())
+        lookup_sizes = np.fromiter(
+            (len(k) for k in lookup_keys), dtype=np.int32, count=len(lookup_keys)
+        )
+        lookup_offsets = np.empty(len(lookup_keys) + 1, dtype=np.int32)
+        lookup_offsets[0] = 0
+        np.cumsum(lookup_sizes, out=lookup_offsets[1:])
+        lookup_members_flat = np.fromiter(
+            itertools.chain.from_iterable(lookup_keys),
+            dtype=np.int32,
+            count=int(lookup_offsets[-1]),
+        )
+        lookup_indices = np.fromiter(
+            coalition_lookup.values(), dtype=np.int32, count=len(coalition_lookup)
+        )
+
+        moebius_values = _moebius_cpp(
+            members_flat,
+            offsets,
+            lookup_members_flat,
+            lookup_offsets,
+            lookup_indices,
+            np.ascontiguousarray(coalition_predictions, dtype=np.float64),
+        )
+
+        moebius_lookup = {coalition: i for i, coalition in enumerate(coalition_list)}
 
         return InteractionValues(
             values=moebius_values,
@@ -276,6 +361,7 @@ class GraphSHAPIQ:
         *,
         efficiency_routine: bool = True,
         index: ValidMoebiusConverterIndices = "k-SII",
+        use_cpp: bool = True,
     ) -> tuple[InteractionValues, InteractionValues]:
         """Compute Shapley interactions for the graph.
 
@@ -285,6 +371,9 @@ class GraphSHAPIQ:
             order: Maximum order of interactions to return. If None, uses n_players.
             efficiency_routine: If True, ensures efficiency by adjusting neighborhood interactions.
             index: The type of the interaction values.
+            use_cpp: If True, use the C++-accelerated Möbius transform
+                (:meth:`compute_moebius_transform_cpp`). Requires the
+                ``shapiq.graph.cext`` extension to be compiled. Defaults to ``True``.
 
         Returns:
             Tuple of (moebius_coefficients, shapley_interactions).
@@ -333,6 +422,7 @@ class GraphSHAPIQ:
             self._grand_coalition_prediction[0],
             index,
             efficiency_routine=efficiency_routine,
+            use_cpp=use_cpp,
         )
         return moebius_coefficients, shapley_interactions
 
@@ -349,6 +439,7 @@ class GraphSHAPIQ:
         index: ValidMoebiusConverterIndices = "k-SII",
         *,
         efficiency_routine: bool,
+        use_cpp: bool = False,
     ) -> tuple[InteractionValues, InteractionValues]:
         """Core routine for computing GraphSHAPIQ values.
 
@@ -363,15 +454,23 @@ class GraphSHAPIQ:
             max_subset_size: Maximum interaction size.
             order: Maximum order of interactions.
             grand_coalition_prediction_node: Prediction for the grand coalition.
+            use_cpp: If True, use the C++-accelerated Möbius transform.
 
         Returns:
             Tuple of (final Möbius coefficients, Shapley interactions).
         """
-        moebius_coefficients = self.compute_moebius_transform(
-            coalitions=moebius_interactions,
-            coalition_predictions=masked_predictions,
-            coalition_lookup=moebius_coalition_lookup,
-        )
+        if use_cpp:
+            moebius_coefficients = self.compute_moebius_transform_cpp(
+                coalitions=moebius_interactions,
+                coalition_predictions=masked_predictions,
+                coalition_lookup=moebius_coalition_lookup,
+            )
+        else:
+            moebius_coefficients = self.compute_moebius_transform(
+                coalitions=moebius_interactions,
+                coalition_predictions=masked_predictions,
+                coalition_lookup=moebius_coalition_lookup,
+            )
         moebius_coefficients.sparsify(self.sparsify_threshold)
 
         if efficiency_routine and incomplete_neighborhoods:
