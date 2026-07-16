@@ -48,7 +48,7 @@ GraphSHAP-IQ in this repository is implemented as a graph subpackage with four m
 1. GraphGame: wraps a PyTorch Geometric graph/model as a cooperative game over nodes.
 2. GraphSHAPIQ: builds locality-pruned coalitions, computes Möbius coefficients, optionally applies an efficiency correction, and converts them to interaction indices.
 3. GraphExplainer: user-facing integration with shapiq's `Explainer` framework.
-4. `cext`: optional C++ acceleration for the Möbius transform used by `GraphSHAPIQ.explain(..., use_cpp=True)`.
+4. `cext`: C++ acceleration for the Möbius transform used by `GraphSHAPIQ.explain(..., use_cpp=True)`.
 
 The public Python API exported by `shapiq.graph` currently consists of `GraphGame`, `GraphExplainer`, and `GraphSHAPIQ`.
 
@@ -74,7 +74,7 @@ The public Python API exported by `shapiq.graph` currently consists of `GraphGam
 - [src/shapiq/graph/base.py](src/shapiq/graph/base.py): `GraphGame`.
 - [src/shapiq/graph/graphshapiq.py](src/shapiq/graph/graphshapiq.py): `GraphSHAPIQ` core algorithm and public Möbius-transform routines.
 - [src/shapiq/graph/explainer.py](src/shapiq/graph/explainer.py): `GraphExplainer` integration layer.
-- [src/shapiq/graph/cext](src/shapiq/graph/cext): C++ sources for the optional Möbius-transform acceleration.
+- [src/shapiq/graph/cext](src/shapiq/graph/cext): C++ sources for the Möbius-transform acceleration.
 - [src/shapiq/graph/demo](src/shapiq/graph/demo): notebooks, datasets, checkpoints, and generated artifacts.
 
 | File | Role |
@@ -83,8 +83,8 @@ The public Python API exported by `shapiq.graph` currently consists of `GraphGam
 | [src/shapiq/graph/base.py](src/shapiq/graph/base.py) | `GraphGame` |
 | [src/shapiq/graph/graphshapiq.py](src/shapiq/graph/graphshapiq.py) | Exact/truncated GraphSHAP-IQ routine |
 | [src/shapiq/graph/explainer.py](src/shapiq/graph/explainer.py) | User-facing explainer |
-| [src/shapiq/graph/cext](src/shapiq/graph/cext) | Optional C++ acceleration |
-
+| [src/shapiq/graph/cext/cext.cc](src/shapiq/graph/cext/cext.cc)    | Python-to-C++ interface layer   |
+| [src/shapiq/graph/cext/moebius.cc](src/shapiq/graph/cext/moebius.cc) | Core Moebius-transform algorithm |
 
 ---
 
