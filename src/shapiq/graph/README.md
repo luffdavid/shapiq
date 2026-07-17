@@ -138,15 +138,6 @@ interaction_values = explainer.explain(
 )
 ```
 
-### Batch Explanation
-
-```python
-results = explainer.explain_X(
-    [x_graph_1, x_graph_2],
-    n_jobs=-1,
-    verbose=True,
-)
-```
 
 ### Low-Level API
 
@@ -187,7 +178,6 @@ Suggested local checks:
 
 ```bash
 uv run pytest tests/shapiq/graph -q
-uv run pre-commit run --all-files
 ```
 
 ---
@@ -197,19 +187,12 @@ uv run pre-commit run --all-files
 Use this order to review with minimal context switching.
 
 1. Package entrypoint -> [src/shapiq/graph/__init__.py](src/shapiq/graph/__init__.py)
-   Confirm the public import surface.
 2. Core game abstraction -> [src/shapiq/graph/base.py](src/shapiq/graph/base.py)
-   Validate masking semantics, baseline construction, normalization, and model-output handling.
 3. Core algorithm -> [src/shapiq/graph/graphshapiq.py](src/shapiq/graph/graphshapiq.py)
-   Validate neighborhood logic, coalition pruning, Möbius computation, efficiency handling, and exactness bookkeeping.
 4. Explainer integration -> [src/shapiq/graph/explainer.py](src/shapiq/graph/explainer.py)
-   Validate public API behavior, `Data`-type requirements, batching, and metadata propagation.
 5. Optional acceleration -> [src/shapiq/graph/cext](src/shapiq/graph/cext)
-   Review only if you need to understand the compiled Möbius-transform path.
 6. Tests -> [tests/shapiq/graph](tests/shapiq/graph)
-   Prioritize exact comparisons, truncation behavior, and API contracts.
 7. Demo artifacts -> [src/shapiq/graph/demo](src/shapiq/graph/demo)
-   Validate notebooks, checkpoints, and generated outputs.
 
 ---
 
